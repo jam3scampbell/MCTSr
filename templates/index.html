@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="initial-scale=1.0">
+    <title>Tree Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .node {
+            cursor: pointer;
+        }
+        .node:hover {
+            stroke: #000;
+            stroke-width: 1.5px;
+        }
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 1.5px;
+        }
+        #metadata {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tree Visualization</h1>
+    <div id="graph" style="width: 100%; height: 100%;"></div>
+    <div id="metadata">
+        <h2>Node Metadata</h2>
+        <pre id="meta-content">Click on a node to see metadata</pre>
+    </div>
+
+    <script>
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "-0 -5 10 10")
+            .attr("refX", 15)
+            .attr("refY", 0)
+            .attr("orient", "auto")
+            .attr("markerWidth", 10)
+            .attr("markerHeight", 10)
+            .attr("xoverflow", "visible")
+            .append("svg:path")
+            .attr("d", "M 0,-5 L 10 ,0 L 0,5")
+            .attr("fill", "#ccc")
+            .style("stroke", "none");
+
+        let simulation, link, nodeGroup;
+
+        function updateGraph(graphData) {
+            svg.selectAll("*").remove();
+
+            link = svg.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(graphData.links)
+                .enter().append("line")
+                .attr("class", "link")
+                .attr("marker-end", "url(#arrowhead)");
+
+            nodeGroup = svg.append("g")
+                .attr("class", "nodes")
+                .selectAll("g")
+                .data(graphData.nodes)
+                .enter().append("g")
+                .attr("class", "node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended))
+                .on("click", displayMetadata);
+
+            nodeGroup.append("circle")
+                .attr("r", 30)
+                .attr("fill", "#69b3a2");
+
+            nodeGroup.append("text")
+                .attr("text-anchor", "middle")
+                .attr("dy", ".35em")
+                .style("font-size", "12px")
+                .text(d => d.short_desc);
+
+            simulation = d3.forceSimulation(graphData.nodes)
+                .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("x", d3.forceX(width / 2).strength(0.05))
+                .force("y", d3.forceY(height / 2).strength(0.05))
+                .force("collide", d3.forceCollide().radius(35))
+                .on("tick", ticked);
+
+            function ticked() {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                nodeGroup
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+            }
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function displayMetadata(event, d) {
+            const metadata = d.metadata;
+            document.getElementById('meta-content').textContent = metadata;
+        }
+
+        function fetchGraphData() {
+            fetch('/graph')
+                .then(response => response.json())
+                .then(data => updateGraph(data));
+        }
+
+        setInterval(fetchGraphData, 5000);
+        fetchGraphData();
+    </script>
+</body>
+</html>
